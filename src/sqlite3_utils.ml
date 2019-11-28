@@ -28,35 +28,39 @@ let bind_ stmt i d : unit = check_ret (bind stmt i d)
 
 (** Parameters passed to a statement *)
 module Ty = struct
+  type _ arg =
+    | Int : int arg
+    | Int64 : int64 arg
+    | Float : float arg
+    | String : [`Blob|`Text|`Both] -> string arg
+    | Data : Data.t arg
+
   type (_,_) t =
     | Nil : ('res, 'res) t
-    | Int : ('a, 'res) t -> (int -> 'a, 'res) t
-    | Int64 : ('a, 'res) t -> (int64 -> 'a, 'res) t
-    | Float : ('a, 'res) t -> (float -> 'a, 'res) t
-    | String : [`Blob|`Text|`Both] * ('a, 'res) t -> (string -> 'a, 'res) t
-    | Data : ('a, 'res) t -> (Data.t -> 'a, 'res) t
-
-  type ('a, 'b, 'res) arg = ('b, 'res) t -> ('a -> 'b, 'res) t
+    | Cons : 'a arg * ('b, 'res) t -> ('a -> 'b, 'res) t
+    (* TODO: add this (with distinct count for args and row)
+       | Raw : (Data.t array, 'res) t
+    *)
 
   let nil = Nil
-  let int x = Int x
-  let int64 x = Int64 x
-  let float x = Float x
-  let text x = String (`Text, x)
-  let blob x = String (`Blob, x)
-  let any_str x = String (`Both, x)
-  let data x = Data x
+  let int = Int
+  let int64 = Int64
+  let float = Float
+  let text = String `Text
+  let blob = String `Blob
+  let any_str = String `Both
+  let data = Data
 
-  let (@>) (x:_ -> _ t) (y:_ t) = x y
+  let (@>) x y = Cons (x,y)
+  let p1 x = Cons (x,Nil)
+  let p2 x y = Cons (x,Cons (y,Nil))
+  let p3 x y z = Cons (x,Cons (y,Cons (z,Nil)))
+  let p4 x y z w = Cons (x,Cons (y,Cons (z,Cons (w,Nil))))
 
   let rec count : type a r. (a, r) t -> int
     = function
     | Nil -> 0
-    | Int x -> 1 + count x
-    | Int64 x -> 1 + count x
-    | Float x -> 1 + count x
-    | String (_,x) -> 1 + count x
-    | Data x -> 1 + count x
+    | Cons (_, tl) -> 1 + count tl
 
   (* translate parameters *)
   let rec tr_args
@@ -64,17 +68,17 @@ module Ty = struct
     = fun stmt i p cb ->
       match p with
       | Nil -> cb()
-      | Int k ->
+      | Cons(Int, k) ->
         (fun x -> bind_ stmt i (Data.INT (Int64.of_int x)); tr_args stmt (i+1) k cb)
-      | Int64 k ->
+      | Cons (Int64, k) ->
         (fun x -> bind_ stmt i (Data.INT x); tr_args stmt (i+1) k cb)
-      | String ((`Text|`Both),k) ->
+      | Cons (String (`Text|`Both),k) ->
         (fun x -> bind_ stmt i (Data.TEXT x); tr_args stmt (i+1) k cb)
-      | String (`Blob,k) ->
+      | Cons (String `Blob,k) ->
         (fun x -> bind_ stmt i (Data.BLOB x); tr_args stmt (i+1) k cb)
-      | Float k ->
+      | Cons (Float, k) ->
         (fun x -> bind_ stmt i (Data.FLOAT x); tr_args stmt (i+1) k cb)
-      | Data k ->
+      | Cons (Data, k) ->
         (fun x -> bind_ stmt i x; tr_args stmt (i+1) k cb)
 
   (* translate results *)
@@ -82,24 +86,24 @@ module Ty = struct
     : type a res. (int->Data.t) -> int -> (a,res) t -> a -> res
     = fun get i ty f -> match ty with
       | Nil -> f
-      | Data k ->
+      | Cons (Data, k) ->
         let data = get i in
         tr_row get (i+1) k (f data)
-      | Int64 k ->
+      | Cons (Int64, k) ->
         (match get i with
          | Data.INT x -> tr_row get (i+1) k (f x)
          | d -> raise (Type_error d))
-      | Int k ->
+      | Cons (Int, k) ->
         (match get i with
          | Data.INT x as d -> 
            let x = try Int64.to_int x with _ -> raise (Type_error d) in
            tr_row get (i+1) k (f x)
          | d -> raise (Type_error d))
-      | Float k ->
+      | Cons (Float, k) ->
         (match get i with
          | Data.FLOAT x -> tr_row get (i+1) k (f x)
          | d -> raise (Type_error d))
-      | String (kind, k) ->
+      | Cons (String kind, k) ->
         (match get i, kind with
          | Data.BLOB x, `Blob -> tr_row get (i+1) k (f x)
          | Data.TEXT x, `Text -> tr_row get (i+1) k (f x)
@@ -139,9 +143,9 @@ module Cursor = struct
   let next self : _ option =
     match self.cur with
     | None -> None
-    | Some _ ->
+    | Some _ as x ->
       next_ self;
-      self.cur
+      x
 
   let rec iter ~f self = match self.cur with
     | None -> ()
@@ -174,48 +178,6 @@ module Cursor = struct
 
   let to_list c = List.rev (to_list_rev c)
 end
-
-(* TODO
-let statement_query_iter (type a b) ~(f:b) (statement:(a,b,unit) statement) : a =
-  let instance = enter_statement_ statement in
-  Ty.tr_args instance.stmt 0 statement.params
-    (fun () ->
-       try_finally ~h:(exit_statement_ instance) statement
-         (fun () ->
-            let rc = ref (Sqlite3.step instance.stmt) in
-           while !rc = Rc.ROW do
-             let k = Sqlite3.data_count instance.stmt in
-             if k <> Ty.count statement.res then (
-               failwith "Sqlite3EZ.statement_query: varying number of result columns"
-             );
-             Ty.tr_row (Sqlite3.column instance.stmt) 0 statement.res f;
-             rc := Sqlite3.step instance.stmt;
-           done;
-           check_rc !rc;
-           ))
-
-let statement_query_fold (type a b res)
-    ~(f:b)
-    (statement:(a,b,init:res->res) statement) : a =
-  let instance = enter_statement_ statement in
-  Ty.tr_args instance.stmt 0 statement.params
-    (fun () ->
-       try_finally ~h:(exit_statement_ instance) statement
-         (fun () ~init ->
-            let x = ref init in
-            let rc = ref (Sqlite3.step instance.stmt) in
-           while !rc = Rc.ROW do
-             let k = Sqlite3.data_count instance.stmt in
-             if k <> Ty.count statement.res then (
-               failwith "Sqlite3EZ.statement_query: varying number of result columns"
-             );
-             x := Ty.tr_row (Sqlite3.column instance.stmt)  0 statement.res f ~init:!x;
-             rc := Sqlite3.step instance.stmt;
-           done;
-           check_rc !rc;
-           !x
-           ))
-*)
 
 let finally_ ~h x f =
   try
@@ -264,17 +226,36 @@ let exec_raw_a db str a ~f =
         f (Cursor.make_raw stmt))
 
 (* execute statement parametrized by the array of arguments *)
-let exec db str ~params ~row ~f =
+let exec db str ~ty ~f =
+  let params, ty_r, f_r = ty in
   let stmt = Sqlite3.prepare db str in
+  check_arity_params_ stmt (Ty.count params);
   (* caution, bind starts at [1] *)
   Ty.tr_args stmt 1 params
     (fun () ->
        finally_ ~h:finalize_check_ stmt
          (fun stmt ->
-            check_arity_params_ stmt (Ty.count params);
-            check_arity_res_ stmt (Ty.count (fst row));
-            let ty_r, f_r = row in
+            check_arity_res_ stmt (Ty.count ty_r);
             f (Cursor.make stmt ty_r f_r)))
+
+let exec_no_params db str ~ty ~f =
+  with_stmt db str
+    ~f:(fun stmt ->
+        check_arity_params_ stmt 0;
+        let ty_r, f_r = ty in
+        f (Cursor.make stmt ty_r f_r))
+
+let exec_no_cursor db str ~ty =
+  let stmt = Sqlite3.prepare db str in
+  check_arity_params_ stmt (Ty.count ty);
+  (* caution, bind starts at [1] *)
+  Ty.tr_args stmt 1 ty
+    (fun () ->
+       finally_ ~h:finalize_check_ stmt
+         (fun stmt ->
+            check_arity_res_ stmt 0;
+            (* just execute one step *)
+            check_ret @@ Sqlite3.step stmt))
 
 (* From [ocaml-sqlite3EZ](https://github.com/mlin/ocaml-sqlite3EZ),
    with some changes. Compatible license (MIT) *)

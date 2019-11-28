@@ -26,21 +26,27 @@ val setup_timeout : ?ms:int -> t -> unit
 module Ty : sig
   type ('a, 'res) t
 
-  type ('a, 'b, 'res) arg = ('b, 'res) t -> ('a -> 'b, 'res) t
-  (** The description of an argument of type ['a] *)
+  type 'a arg
+
+  val int : int arg
+  val int64 : int64 arg
+  val float : float arg
+  val text : string arg
+  val blob : string arg
+  val any_str : string arg
+  val data : Data.t arg
 
   val nil : ('res, 'res) t
-  val int : (int, _, _) arg
-  val int64 : (int64, _, _) arg
-  val float : (float, _, _) arg
-  val text : (string, _, _) arg
-  val blob : (string, _, _) arg
-  val any_str : (string, _, _) arg
-  val data : (Data.t, _, _) arg
+  (** 0 arguments *)
 
-  val (@>) : ('a, 'b, 'res) arg -> ('b, 'res) t -> ('a -> 'b, 'res) t
+  val (@>) : 'a arg -> ('b, 'res) t -> ('a -> 'b, 'res) t
   (** Right-associative chaining.
       [int @> float @> nil] is the same as [int (float nil)]. *)
+
+  val p1: 'a arg -> ('a -> 'res, 'res) t
+  val p2: 'a arg -> 'b arg -> ('a -> 'b -> 'res, 'res) t
+  val p3: 'a arg -> 'b arg -> 'c arg -> ('a -> 'b -> 'c -> 'res, 'res) t
+  val p4: 'a arg -> 'b arg -> 'c arg -> 'd arg -> ('a -> 'b -> 'c -> 'd -> 'res, 'res) t
 end
 
 module Cursor : sig
@@ -82,9 +88,19 @@ val exec_raw_a :
 
 val exec :
   t -> string ->
-  params:('a, 'res) Ty.t ->
-  row:(('b, 'c) Ty.t * 'b) ->
+  ty:( ('a, 'res) Ty.t * ('b, 'c) Ty.t * 'b ) ->
   f:('c Cursor.t -> 'res) -> 'a
+
+val exec_no_params :
+  t -> string ->
+  ty:(('b, 'c) Ty.t * 'b) ->
+  f:('c Cursor.t -> 'res) ->
+  'res
+
+val exec_no_cursor :
+  t -> string ->
+  ty:('a, unit) Ty.t ->
+  'a
 
 val transact : t -> (t -> 'a) -> 'a
 
