@@ -53,17 +53,26 @@ module Cursor : sig
   type 'a t
   (** A cursor yielding values of type ['a] *)
 
+  val ignore : _ t -> unit
+  (** Ignore this cursor *)
+
   val next : 'a t -> 'a option
+  (** Get next value, or [None] if all values have been enumerated *)
 
   val iter : f:('a -> unit) -> 'a t -> unit
+  (** Iterate over the values *)
 
   val to_seq : 'a t -> 'a Seq.t
   (** Lazy iterator over the values.
       Be careful not to let this leak outside the scope of a statement. *)
 
   val to_list_rev : 'a t -> 'a list
+  (** Get a list of the values in the cursor, in reverse order.
+      Faster than {!to_list} *)
 
   val to_list : 'a t -> 'a list
+  (** Get a list of the values in the cursor, in normal order.
+      Slower than {!to_list} *)
 end
 
 val with_stmt : t -> string -> f:(Sqlite3.stmt -> 'a) -> 'a

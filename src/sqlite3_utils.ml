@@ -118,6 +118,8 @@ module Cursor = struct
     mutable cur: 'a option;
   }
 
+  let ignore _ = ()
+
   let next_ self : unit =
     match Sqlite3.step self.stmt with
     | Sqlite3.Rc.DONE ->
