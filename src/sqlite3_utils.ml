@@ -118,7 +118,6 @@ module Cursor = struct
     match Sqlite3.step self.stmt with
     | Sqlite3.Rc.DONE ->
       self.cur <- None;
-      check_ret @@ Sqlite3.finalize self.stmt; (* cleanup *)
     | Sqlite3.Rc.ROW ->
       let x = self.read self.stmt in
       self.cur <- Some x
@@ -218,20 +217,20 @@ let statement_query_fold (type a b res)
            ))
 *)
 
-let finally_ ~h ~f x =
+let finally_ ~h x f =
   try
-    let y = f x in
-    h();
-    y
+    let res = f x in
+    h x;
+    res
   with e ->
-    h();
+    h x;
     raise e
+
+let finalize_check_ stmt = check_ret @@ Sqlite3.finalize stmt
 
 let with_stmt db str ~f =
   let stmt = Sqlite3.prepare db str in
-  finally_
-    ~h:(fun () -> Sqlite3.finalize stmt |> check_ret)
-    ~f stmt
+  finally_ ~h:finalize_check_ stmt f
 
 let check_arity_params_ stmt n : unit =
   if Sqlite3.bind_parameter_count stmt <> n then (
@@ -266,14 +265,16 @@ let exec_raw_a db str a ~f =
 
 (* execute statement parametrized by the array of arguments *)
 let exec db str ~params ~row ~f =
-  with_stmt db str
-    ~f:(fun stmt ->
-        check_arity_params_ stmt (Ty.count params);
-        check_arity_res_ stmt (Ty.count (fst row));
-        Ty.tr_args stmt 0 params
-          (fun () ->
-             let ty_r, f_r = row in
-             f (Cursor.make stmt ty_r f_r)))
+  let stmt = Sqlite3.prepare db str in
+  (* caution, bind starts at [1] *)
+  Ty.tr_args stmt 1 params
+    (fun () ->
+       finally_ ~h:finalize_check_ stmt
+         (fun stmt ->
+            check_arity_params_ stmt (Ty.count params);
+            check_arity_res_ stmt (Ty.count (fst row));
+            let ty_r, f_r = row in
+            f (Cursor.make stmt ty_r f_r)))
 
 (* From [ocaml-sqlite3EZ](https://github.com/mlin/ocaml-sqlite3EZ),
    with some changes. Compatible license (MIT) *)

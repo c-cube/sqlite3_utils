@@ -1,4 +1,7 @@
 include module type of Sqlite3
+  with module Data = Sqlite3.Data
+  and module Rc = Sqlite3.Rc
+  and type db = Sqlite3.db
 
 exception RcError of Rc.t
 (** Exception raised by most of the functions below when a Sqlite failure
