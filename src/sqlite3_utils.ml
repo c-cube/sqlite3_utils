@@ -3,7 +3,9 @@
 
 (** {1 Utils for SQLite} *)
 
-include Sqlite3
+module Data = Sqlite3.Data
+module Rc = Sqlite3.Rc
+type db = Sqlite3.db
 
 exception RcError of Sqlite3.Rc.t
 exception Type_error of Data.t
@@ -24,7 +26,7 @@ let check_ret = function
 let setup_timeout ?(ms=300) db : unit =
   Sqlite3.busy_timeout db ms
 
-let bind_ stmt i d : unit = check_ret (bind stmt i d)
+let bind_ stmt i d : unit = check_ret (Sqlite3.bind stmt i d)
 
 (** Parameters passed to a statement *)
 module Ty = struct
