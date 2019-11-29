@@ -1,2 +1,1 @@
-
-# Sqlite3_utils [![build status](https://travis-ci.org/c-cube/sqlite3_utils.svg?branch=master)](https://travis-ci.org/c-cube/sqlite3_utils) 
+# Sqlite3_utils [![Actions Status](https://github.com/c-cube/sqlite3_utils/workflows/build/badge.svg)](https://github.com/c-cube/sqlite3_utils/actions)

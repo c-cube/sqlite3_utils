@@ -1,4 +1,4 @@
-name: Build sqlite_utils
+name: build
 on: [push]
 jobs:
   run:
