@@ -300,3 +300,93 @@ let atomically db f =
     exec0 db "RELEASE a;";
     exec0 db "ROLLBACK TO a;";
     raise exn
+
+(*$inject
+  let with_test_db f : unit =
+    with_db ":memory:" (fun db ->
+        exec0 db
+          "create table person(name text, job text, age int); ";
+        exec0 db
+          "insert into person values
+            ('john', 'PHB', 42), ('alice', 'hacker', 20),
+            ('bob', 'caller', 20), ('eve', 'spy', 99);";
+        exec0 db
+          "create table friendorfoe(p1 text, p2 text, level int); ";
+        exec0 db
+          "insert into friendorfoe values
+            ('john', 'bob', 1), ('bob', 'alice', 1),
+            ('bob', 'eve', -2), ('alice', 'eve', -5) ; ";
+        f db)
+*)
+
+(* update test *)
+(*$R
+  with_test_db (fun db ->
+        exec0 db
+          "insert or ignore into friendorfoe (p1, p2, level)
+            select p2, p1, level from friendorfoe ;";
+        let l = exec db ~ty:Ty.(p1 text, p2 text int, mkp2)
+          "select p2, level from friendorfoe where p1 = ? order by p2;"
+          "eve" ~f:Cursor.to_list
+        in
+        assert_equal ~printer:Q.Print.(list @@ pair string int) [
+          "alice", -5;
+          "bob", -2;
+        ] l;)
+*)
+
+
+(* basic cursor test *)
+(*$R
+  with_test_db (fun db ->
+        exec_no_params db
+          "select name, job from person where age=20 order by name;"
+          ~ty:Ty.(p2 text text, mkp2)
+          ~f:(fun c ->
+              match Cursor.next c with
+              | None -> assert_failure "cursor too short"
+              | Some (n1,j1) ->
+                assert_equal "alice" n1;
+                assert_equal "hacker" j1;
+                match Cursor.next c with
+                | None -> assert_failure "cursor too short"
+                | Some (n2,j2) ->
+                  assert_equal "bob" n2;
+                  assert_equal "caller" j2;
+                  match Cursor.next c with
+                  | None -> ()
+                  | Some _ -> assert_failure "cursor too long"
+            ))
+*)
+
+(* recursive query test *)
+(*$R
+  let q = "with recursive fib(a,b,c) as 
+    ( values (1,1,1),(2,1,2) UNION select a+1, c, b+c from fib where a<100)
+    select a, c from fib where a<= ?;"
+  in
+  let l_expect =  [
+    1,1;
+    2,2;
+    3,3;
+    4,5;
+    5,8;
+    6,13;
+    7,21;
+    8,34;
+    9,55;
+    10,89;
+    11,144;
+    12,233;
+    13,377;
+    14,610;
+    15,987;
+  ] in
+  with_db ":memory:" (fun db ->
+      let l =
+        exec db q ~ty:Ty.(p1 int, p2 int int, (fun x y->x,y))
+          15 ~f:Cursor.to_list
+      in
+      assert_equal ~printer:Q.Print.(list @@ pair int int) l_expect l 
+    )
+*)
