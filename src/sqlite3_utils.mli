@@ -20,6 +20,20 @@ val check_ret : Rc.t -> unit
 val setup_timeout : ?ms:int -> t -> unit
 (** on "busy", wait [ms] milliseconds before failing. *)
 
+val with_db :
+  ?mode:[ `NO_CREATE | `READONLY ] ->
+  ?uri:bool ->
+  ?memory:bool ->
+  ?mutex:[ `FULL | `NO ] ->
+  ?cache:[ `PRIVATE | `SHARED ] -> ?vfs:string ->
+  ?timeout:int ->
+  string -> (t -> 'a) -> 'a
+(** Temporarily open a DB connection.
+    Parameters follow {!Sqlite3.db_open}.
+    @param timeout if provided, timeout in milliseconds before a query fails
+      with "BUSY".
+*)
+
 (** Values representing types to pass to a statement, or to extract from 
     a row *)
 module Ty : sig
@@ -46,6 +60,11 @@ module Ty : sig
   val p2: 'a arg -> 'b arg -> ('a -> 'b -> 'res, 'res) t
   val p3: 'a arg -> 'b arg -> 'c arg -> ('a -> 'b -> 'c -> 'res, 'res) t
   val p4: 'a arg -> 'b arg -> 'c arg -> 'd arg -> ('a -> 'b -> 'c -> 'd -> 'res, 'res) t
+
+  val id : 'a -> 'a
+  val mkp2 : 'a -> 'b -> 'a * 'b
+  val mkp3: 'a -> 'b -> 'c -> 'a * 'b * 'c
+  val mkp4: 'a -> 'b -> 'c -> 'd -> 'a * 'b * 'c * 'd
 end
 
 module Cursor : sig

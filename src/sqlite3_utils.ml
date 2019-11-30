@@ -59,6 +59,11 @@ module Ty = struct
   let p3 x y z = Cons (x,Cons (y,Cons (z,Nil)))
   let p4 x y z w = Cons (x,Cons (y,Cons (z,Cons (w,Nil))))
 
+  let id x = x
+  let mkp2 x y = x,y
+  let mkp3 x y z = x,y,z
+  let mkp4 x y z w = x,y,z,w
+
   let rec count : type a r. (a, r) t -> int
     = function
     | Nil -> 0
@@ -193,6 +198,14 @@ let finally_ ~h x f =
     raise e
 
 let finalize_check_ stmt = check_ret @@ Sqlite3.finalize stmt
+
+let db_close_rec_ db =
+  while not (Sqlite3.db_close db) do () done
+
+let with_db ?mode ?uri ?memory ?mutex ?cache ?vfs ?timeout str f =
+  let db = Sqlite3.db_open ?mode ?uri ?memory ?mutex ?cache ?vfs str in
+  (match timeout with Some ms -> setup_timeout db ~ms | None -> ());
+  finally_ ~h:db_close_rec_ db f
 
 let with_stmt db str ~f =
   let stmt = Sqlite3.prepare db str in
