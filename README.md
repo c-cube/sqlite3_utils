@@ -50,13 +50,13 @@ We can use sqlite to compute recursive functions with the
 ```ocaml
 # let fib n =
   let q = "with recursive fib(a,b,c) as
-    ( values (1,1,1),(2,1,2) UNION select a+1, c, b+c from fib where a<100)
+    ( values (1,1,1),(2,1,2) UNION select a+1, c, b+c from fib where a<=?)
     select c from fib where a = ?;"
   in
   with_db ":memory:" (fun db ->
       let l =
-        exec db q ~ty:Ty.(p1 int, p1 int, id)
-          n ~f:Cursor.to_list
+        exec db q ~ty:Ty.(p2 int int, p1 int, id)
+          n n ~f:Cursor.to_list
       in
       match l with
       | Ok [n] -> n
