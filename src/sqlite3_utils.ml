@@ -17,16 +17,20 @@ let () = Printexc.register_printer
 
 type t = db
 
-let check_ret = function
+let check_ret_exn = function
   | Sqlite3.Rc.DONE
   | Sqlite3.Rc.OK -> ()
   | rc -> raise (RcError rc)
+
+let check_ret x = function
+  | Sqlite3.Rc.DONE | Sqlite3.Rc.OK -> Ok x
+  | rc -> Error rc
 
 (* on "busy", wait 300ms before failing *)
 let setup_timeout ?(ms=300) db : unit =
   Sqlite3.busy_timeout db ms
 
-let bind_ stmt i d : unit = check_ret (Sqlite3.bind stmt i d)
+let bind_ stmt i d : unit = check_ret_exn (Sqlite3.bind stmt i d)
 
 (** Parameters passed to a statement *)
 module Ty = struct
@@ -197,7 +201,7 @@ let finally_ ~h x f =
     h x;
     raise e
 
-let finalize_check_ stmt = check_ret @@ Sqlite3.finalize stmt
+let finalize_check_ stmt = check_ret_exn @@ Sqlite3.finalize stmt
 
 let db_close_rec_ db =
   while not (Sqlite3.db_close db) do () done
@@ -225,25 +229,34 @@ let check_arity_res_ stmt n : unit =
          (Sqlite3.column_count stmt) n);
   )
 
+let exec0_exn db str : unit = check_ret_exn @@ Sqlite3.exec db str
+let exec0 db str : _ result = check_ret () @@ Sqlite3.exec db str
+
 (* execute statement, return cursor *)
-let exec_raw db str ~f =
+let exec_raw_exn db str ~f =
   with_stmt db str
     ~f:(fun stmt ->
         check_arity_params_ stmt 0;
         f (Cursor.make_raw stmt))
 
-let exec0 db str : unit = check_ret @@ Sqlite3.exec db str
+let exec_raw db str ~f =
+  try Ok (exec_raw_exn db str ~f)
+  with RcError c -> Error c
 
 (* execute statement parametrized by the array of arguments *)
-let exec_raw_a db str a ~f =
+let exec_raw_args_exn db str a ~f =
   with_stmt db str
     ~f:(fun stmt ->
         check_arity_params_ stmt (Array.length a);
-        Array.iteri (fun i x -> check_ret (Sqlite3.bind stmt (i+1) x)) a;
+        Array.iteri (fun i x -> check_ret_exn (Sqlite3.bind stmt (i+1) x)) a;
         f (Cursor.make_raw stmt))
 
+let exec_raw_args db str a ~f =
+  try Ok (exec_raw_args_exn db str a ~f)
+  with RcError c -> Error c
+
 (* execute statement parametrized by the array of arguments *)
-let exec db str ~ty ~f =
+let exec_exn db str ~ty ~f =
   let params, ty_r, f_r = ty in
   let stmt = Sqlite3.prepare db str in
   check_arity_params_ stmt (Ty.count params);
@@ -255,14 +268,22 @@ let exec db str ~ty ~f =
             check_arity_res_ stmt (Ty.count ty_r);
             f (Cursor.make stmt ty_r f_r)))
 
-let exec_no_params db str ~ty ~f =
+let exec db str ~ty ~f =
+  exec_exn db str ~ty
+    ~f:(fun c -> try (Ok (f c)) with RcError rc -> Error rc)
+
+let exec_no_params_exn db str ~ty ~f =
   with_stmt db str
     ~f:(fun stmt ->
         check_arity_params_ stmt 0;
         let ty_r, f_r = ty in
         f (Cursor.make stmt ty_r f_r))
 
-let exec_no_cursor db str ~ty =
+let exec_no_params db str ~ty ~f =
+  exec_no_params_exn db str ~ty
+    ~f:(fun c -> try (Ok (f c)) with RcError rc -> Error rc)
+
+let exec_no_cursor_ db str ~ty ~check =
   let stmt = Sqlite3.prepare db str in
   check_arity_params_ stmt (Ty.count ty);
   (* caution, bind starts at [1] *)
@@ -272,47 +293,53 @@ let exec_no_cursor db str ~ty =
          (fun stmt ->
             check_arity_res_ stmt 0;
             (* just execute one step *)
-            check_ret @@ Sqlite3.step stmt))
+            check @@ Sqlite3.step stmt))
+
+let exec_no_cursor_exn db str ~ty =
+  exec_no_cursor_ db str ~ty ~check:check_ret_exn
+
+let exec_no_cursor db str ~ty =
+  exec_no_cursor_ db str ~ty ~check:(check_ret ())
 
 (* From [ocaml-sqlite3EZ](https://github.com/mlin/ocaml-sqlite3EZ),
    with some changes. Compatible license (MIT) *)
 let transact db f =
-  exec0 db "BEGIN;";
+  exec0_exn db "BEGIN;";
   try
     let y = f db in
-    exec0 db "COMMIT;";
+    exec0_exn db "COMMIT;";
     y
   with
   | e ->
-    exec0 db "ROLLBACK;";
+    exec0_exn db "ROLLBACK;";
     raise e
 
 (* From [ocaml-sqlite3EZ](https://github.com/mlin/ocaml-sqlite3EZ),
    with some changes. Compatible license (MIT) *)
 let atomically db f =
-  exec0 db "SAVEPOINT a;";
+  exec0_exn db "SAVEPOINT a;";
   try
     let y = f db in
-    exec0 db "RELEASE a;";
+    exec0_exn db "RELEASE a;";
     y
   with
   | exn ->
-    exec0 db "RELEASE a;";
-    exec0 db "ROLLBACK TO a;";
+    exec0_exn db "RELEASE a;";
+    exec0_exn db "ROLLBACK TO a;";
     raise exn
 
 (*$inject
   let with_test_db f : unit =
     with_db ":memory:" (fun db ->
-        exec0 db
+        exec0_exn db
           "create table person(name text, job text, age int); ";
-        exec0 db
+        exec0_exn db
           "insert into person values
             ('john', 'PHB', 42), ('alice', 'hacker', 20),
             ('bob', 'caller', 20), ('eve', 'spy', 99);";
-        exec0 db
+        exec0_exn db
           "create table friendorfoe(p1 text, p2 text, level int); ";
-        exec0 db
+        exec0_exn db
           "insert into friendorfoe values
             ('john', 'bob', 1), ('bob', 'alice', 1),
             ('bob', 'eve', -2), ('alice', 'eve', -5) ; ";
@@ -322,10 +349,10 @@ let atomically db f =
 (* update test *)
 (*$R
   with_test_db (fun db ->
-        exec0 db
+        exec0_exn db
           "insert or ignore into friendorfoe (p1, p2, level)
             select p2, p1, level from friendorfoe ;";
-        let l = exec db ~ty:Ty.(p1 text, p2 text int, mkp2)
+        let l = exec_exn db ~ty:Ty.(p1 text, p2 text int, mkp2)
           "select p2, level from friendorfoe where p1 = ? order by p2;"
           "eve" ~f:Cursor.to_list
         in
@@ -339,7 +366,7 @@ let atomically db f =
 (* basic cursor test *)
 (*$R
   with_test_db (fun db ->
-        exec_no_params db
+        exec_no_params_exn db
           "select name, job from person where age=20 order by name;"
           ~ty:Ty.(p2 text text, mkp2)
           ~f:(fun c ->
@@ -384,7 +411,7 @@ let atomically db f =
   ] in
   with_db ":memory:" (fun db ->
       let l =
-        exec db q ~ty:Ty.(p1 int, p2 int int, (fun x y->x,y))
+        exec_exn db q ~ty:Ty.(p1 int, p2 int int, (fun x y->x,y))
           15 ~f:Cursor.to_list
       in
       assert_equal ~printer:Q.Print.(list @@ pair int int) l_expect l 

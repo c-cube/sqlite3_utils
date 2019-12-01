@@ -13,7 +13,11 @@ exception Type_error of Data.t
 type t = db
 (** Alias for the DB connection *)
 
-val check_ret : Rc.t -> unit
+val check_ret : 'a -> Rc.t -> ('a, Rc.t) result
+(** Check return code.
+    @return [Error rc] if the code is not {!Sqlite3.Rc.DONE} or {!Sqlite3.Rc.OK}. *)
+
+val check_ret_exn : Rc.t -> unit
 (** Check return code.
     @raise RcError if the code is not {!Sqlite3.Rc.DONE} or {!Sqlite3.Rc.OK}. *)
 
@@ -97,16 +101,34 @@ val with_stmt : t -> string -> f:(Sqlite3.stmt -> 'a) -> 'a
 (** Locally make a statement out of the given string, then cleanup
     when [f] returns. *)
 
-val exec0 : t -> string -> unit
+val exec0 : t -> string -> (unit, Rc.t) result
 (** Run the query purely for its side effects. *)
+
+val exec0_exn : t -> string -> unit
+(** Run the query purely for its side effects.
+    @raise RcError if the query failed.
+*)
 
 val exec_raw :
   t ->
   string ->
   f:(Data.t array Cursor.t -> 'b) ->
+  ('b, Rc.t) result
+
+val exec_raw_exn :
+  t ->
+  string ->
+  f:(Data.t array Cursor.t -> 'b) ->
   'b
 
-val exec_raw_a :
+val exec_raw_args :
+  t ->
+  string ->
+  Sqlite3.Data.t array ->
+  f:(Data.t array Cursor.t -> 'b) ->
+  ('b, Rc.t) result
+
+val exec_raw_args_exn :
   t ->
   string ->
   Sqlite3.Data.t array ->
@@ -115,6 +137,11 @@ val exec_raw_a :
 
 val exec :
   t -> string ->
+  ty:( ('a, ('res, Rc.t) result) Ty.t * ('b, 'c) Ty.t * 'b ) ->
+  f:('c Cursor.t -> 'res) -> 'a
+
+val exec_exn :
+  t -> string ->
   ty:( ('a, 'res) Ty.t * ('b, 'c) Ty.t * 'b ) ->
   f:('c Cursor.t -> 'res) -> 'a
 
@@ -122,9 +149,20 @@ val exec_no_params :
   t -> string ->
   ty:(('b, 'c) Ty.t * 'b) ->
   f:('c Cursor.t -> 'res) ->
+  ('res,Rc.t) result
+
+val exec_no_params_exn :
+  t -> string ->
+  ty:(('b, 'c) Ty.t * 'b) ->
+  f:('c Cursor.t -> 'res) ->
   'res
 
 val exec_no_cursor :
+  t -> string ->
+  ty:('a, (unit, Rc.t) result) Ty.t ->
+  'a
+
+val exec_no_cursor_exn :
   t -> string ->
   ty:('a, unit) Ty.t ->
   'a

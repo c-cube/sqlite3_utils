@@ -18,21 +18,24 @@ Let's assume you have installed the library and run:
 # open Sqlite3_utils;;
 ```
 
+Most functions come with `f` and `f_exn` versions, the latter raising `RcError rc`
+where Sqlite returns the error code `rc`, the former returning a `('a, Rc.t) result`.
+
 ### Executing non parametrized statements
 
 Here we use `with_db` to open a new handle and run some code with this
 handle, ensuring the handle is closed when our code returns (no resource leak).
-The function `exec0` is a convenient form for running simple statements
-that take no parameters and return no values, and `exec_raw_a` deal with `Sqlite3.Data.t`
+The function `exec0_exn` is a convenient form for running simple statements
+that take no parameters and return no values, and `exec_raw_args` deal with `Sqlite3.Data.t`
 values for both parameters and values returned by the cursor:
 
 ```ocaml
 # with_db ":memory:" (fun db ->
-   exec0 db "create table person (name text, age int);";
-   exec0 db "insert into person values ('alice', 20), ('bob', 25) ;";
-   exec_raw_a db "select age from person where name=? ;" [| Data.TEXT "alice" |]
+   exec0_exn db "create table person (name text, age int);";
+   exec0_exn db "insert into person values ('alice', 20), ('bob', 25) ;";
+   exec_raw_args db "select age from person where name=? ;" [| Data.TEXT "alice" |]
      ~f:Cursor.to_list);;
-- : Data.t array list = [[|Sqlite3_utils.Data.INT 20L|]]
+- : (Data.t array list, Rc.t) result = Ok [[|Sqlite3_utils.Data.INT 20L|]]
 ```
 
 ### Typed API
@@ -56,7 +59,7 @@ We can use sqlite to compute recursive functions with the
           n ~f:Cursor.to_list
       in
       match l with
-      | [n] -> n
+      | Ok [n] -> n
       | _ -> assert false
     )
     ;;
