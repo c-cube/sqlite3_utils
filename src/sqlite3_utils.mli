@@ -26,8 +26,6 @@ val setup_timeout : ?ms:int -> t -> unit
 
 val with_db :
   ?mode:[ `NO_CREATE | `READONLY ] ->
-  ?uri:bool ->
-  ?memory:bool ->
   ?mutex:[ `FULL | `NO ] ->
   ?cache:[ `PRIVATE | `SHARED ] -> ?vfs:string ->
   ?timeout:int ->

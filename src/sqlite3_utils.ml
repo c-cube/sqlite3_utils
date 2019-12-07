@@ -206,8 +206,8 @@ let finalize_check_ stmt = check_ret_exn @@ Sqlite3.finalize stmt
 let db_close_rec_ db =
   while not (Sqlite3.db_close db) do () done
 
-let with_db ?mode ?uri ?memory ?mutex ?cache ?vfs ?timeout str f =
-  let db = Sqlite3.db_open ?mode ?uri ?memory ?mutex ?cache ?vfs str in
+let with_db ?mode ?mutex ?cache ?vfs ?timeout str f =
+  let db = Sqlite3.db_open ?mode ?mutex ?cache ?vfs str in
   (match timeout with Some ms -> setup_timeout db ~ms | None -> ());
   finally_ ~h:db_close_rec_ db f
 
