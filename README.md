@@ -40,7 +40,29 @@ values for both parameters and values returned by the cursor:
 
 ### Typed API
 
-TODO
+Let us re-consider the previous example but with the typed API:
+
+```ocaml
+# with_db ":memory:" (fun db ->
+   exec0_exn db "create table person (name text, age int);";
+   exec0_exn db "insert into person values ('alice', 20), ('bob', 25) ;";
+   exec db "select age from person where name=? ;"
+    ~ty:Ty.(p1 text, p1 int, (fun (x:int) -> x))
+    "alice"
+     ~f:Cursor.to_list);;
+- : (int list, Rc.t) result = Ok [20]
+```
+
+We provide a `~ty` argument that, in the most general case, `exec`,
+for a parametrized statement that returns values, defines the type
+of parameters and the type of return values.
+Here `ty` is a triple `(type of params, type of result columns, function f)`
+where `f` turns the list of returned columns into a single value. `f`
+can typically be used to build a tuple or record for each result row.
+
+The module `Sqlite3_utils.Ty` contains combinators for declaring types
+(base types: `text`, `int`, `blob`, etc. and composition operators such
+as `int @> text @> nil`) as well as for making simple tuples.
 
 ### Computing the fibonacci function
 

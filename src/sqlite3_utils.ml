@@ -26,6 +26,10 @@ let check_ret x = function
   | Sqlite3.Rc.DONE | Sqlite3.Rc.OK -> Ok x
   | rc -> Error rc
 
+let err_string = function
+  | Ok x -> Ok x
+  | Error rc -> Error (Rc.to_string rc)
+
 (* on "busy", wait 300ms before failing *)
 let setup_timeout ?(ms=300) db : unit =
   Sqlite3.busy_timeout db ms
@@ -155,6 +159,14 @@ module Cursor = struct
     let self = { stmt; cur=None; read; } in
     next_ self;
     self
+
+  let opt_map_ f = function None -> None | Some x -> Some (f x)
+
+  let map ~f c : _ t =
+    {stmt=c.stmt;
+     read=(fun stmt -> f (c.read stmt));
+     cur=opt_map_ f c.cur;
+    }
 
   let make stmt ty f =
     let read stmt = Ty.tr_row (Sqlite3.column stmt) 0 ty f in
