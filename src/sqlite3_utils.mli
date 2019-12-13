@@ -62,6 +62,8 @@ module Ty : sig
   val p2: 'a arg -> 'b arg -> ('a -> 'b -> 'res, 'res) t
   val p3: 'a arg -> 'b arg -> 'c arg -> ('a -> 'b -> 'c -> 'res, 'res) t
   val p4: 'a arg -> 'b arg -> 'c arg -> 'd arg -> ('a -> 'b -> 'c -> 'd -> 'res, 'res) t
+  val p5: 'a arg -> 'b arg -> 'c arg -> 'd arg -> 'e arg -> ('a -> 'b -> 'c -> 'd -> 'e -> 'res, 'res) t
+  val p6: 'a arg -> 'b arg -> 'c arg -> 'd arg -> 'e arg -> 'f arg -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'res, 'res) t
 
   val (@>>) : ('a, 'b) t -> ('b, 'res) t -> ('a, 'res) t
   (** Right-associative append.
@@ -72,6 +74,8 @@ module Ty : sig
   val mkp2 : 'a -> 'b -> 'a * 'b
   val mkp3: 'a -> 'b -> 'c -> 'a * 'b * 'c
   val mkp4: 'a -> 'b -> 'c -> 'd -> 'a * 'b * 'c * 'd
+  val mkp5: 'a -> 'b -> 'c -> 'd -> 'e -> 'a * 'b * 'c * 'd * 'e
+  val mkp6: 'a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'a * 'b * 'c * 'd * 'e * 'f
 end
 
 module Cursor : sig

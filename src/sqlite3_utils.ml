@@ -62,6 +62,8 @@ module Ty = struct
   let p2 x y = Cons (x,Cons (y,Nil))
   let p3 x y z = Cons (x,Cons (y,Cons (z,Nil)))
   let p4 x y z w = Cons (x,Cons (y,Cons (z,Cons (w,Nil))))
+  let p5 x y z w1 w2 = Cons (x,Cons (y,Cons (z,Cons (w1, Cons (w2, Nil)))))
+  let p6 x y z w1 w2 w3 = Cons (x,Cons (y,Cons (z,Cons (w1, Cons (w2, Cons (w3, Nil))))))
 
   let rec (@>>)
     : type a b res. (a, b) t -> (b, res) t -> (a, res) t =
@@ -74,6 +76,8 @@ module Ty = struct
   let mkp2 x y = x,y
   let mkp3 x y z = x,y,z
   let mkp4 x y z w = x,y,z,w
+  let mkp5 x y z w1 w2 = x,y,z,w1,w2
+  let mkp6 x y z w1 w2 w3 = x,y,z,w1,w2,w3
 
   let rec count : type a r. (a, r) t -> int
     = function
