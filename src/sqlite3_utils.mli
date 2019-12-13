@@ -63,6 +63,11 @@ module Ty : sig
   val p3: 'a arg -> 'b arg -> 'c arg -> ('a -> 'b -> 'c -> 'res, 'res) t
   val p4: 'a arg -> 'b arg -> 'c arg -> 'd arg -> ('a -> 'b -> 'c -> 'd -> 'res, 'res) t
 
+  val (@>>) : ('a, 'b) t -> ('b, 'res) t -> ('a, 'res) t
+  (** Right-associative append.
+      [(p2 int float) @>> (p1 text)] is the same as  [p3 int float text].
+      *)
+
   val id : 'a -> 'a
   val mkp2 : 'a -> 'b -> 'a * 'b
   val mkp3: 'a -> 'b -> 'c -> 'a * 'b * 'c

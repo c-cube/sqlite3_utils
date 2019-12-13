@@ -63,6 +63,13 @@ module Ty = struct
   let p3 x y z = Cons (x,Cons (y,Cons (z,Nil)))
   let p4 x y z w = Cons (x,Cons (y,Cons (z,Cons (w,Nil))))
 
+  let rec (@>>)
+    : type a b res. (a, b) t -> (b, res) t -> (a, res) t =
+    fun ty1 ty2 ->
+    match ty1 with
+      | Nil -> ty2
+      | Cons (x, ty1') -> Cons (x, ty1' @>> ty2)
+
   let id x = x
   let mkp2 x y = x,y
   let mkp3 x y z = x,y,z
