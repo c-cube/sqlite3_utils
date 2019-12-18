@@ -127,6 +127,16 @@ module Cursor : sig
   val next : 'a t -> 'a option
   (** Get next value, or [None] if all values have been enumerated *)
 
+  val get_one : 'a t -> ('a, Rc.t) result
+  (** Get the first element (useful when querying a scalar, like "count( * )").
+      returns [Error Rc.NOTFOUND] if it's empty.
+      @since NEXT_RELEASE *)
+
+  val get_one_exn : 'a t -> 'a
+  (** Same as {!get_one} but raises an exception if the cursor is empty.
+      @raise RcError with {!Rc.NOTFOUND} if it's empty.
+      @since NEXT_RELEASE *)
+
   val iter : f:('a -> unit) -> 'a t -> unit
   (** Iterate over the values *)
 

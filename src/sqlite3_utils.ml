@@ -183,6 +183,14 @@ module Cursor = struct
 
   let opt_map_ f = function None -> None | Some x -> Some (f x)
 
+  let get_one c = match c.cur with
+    | None -> Error Rc.NOTFOUND
+    | Some x -> Ok x
+
+  let get_one_exn c = match get_one c with
+    | Ok x -> x
+    | Error rc -> raise (RcError rc)
+
   let map ~f c : _ t =
     {stmt=c.stmt;
      read=(fun stmt -> f (c.read stmt));
