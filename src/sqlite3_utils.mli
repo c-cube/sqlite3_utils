@@ -67,6 +67,11 @@ module Ty : sig
   val any_str : string arg
   val data : Data.t arg
 
+  val nullable : 'a arg -> 'a option arg
+  (** Accepts {!Data.NULL} and {!Data.NONE} or ['a].
+      @raise Invalid_argument if nested.
+      @since NEXT_RELEASE *)
+
   val nil : ('res, 'res) t
   (** 0 type arguments *)
 

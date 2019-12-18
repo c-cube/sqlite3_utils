@@ -44,6 +44,7 @@ module Ty = struct
     | Float : float arg
     | String : [`Blob|`Text|`Both] -> string arg
     | Data : Data.t arg
+    | Nullable : 'a arg -> 'a option arg
 
   type (_,_) t =
     | Nil : ('res, 'res) t
@@ -60,6 +61,12 @@ module Ty = struct
   let blob = String `Blob
   let any_str = String `Both
   let data = Data
+
+  let nullable
+    : type a. a arg -> a option arg
+    = function
+      | Nullable _ -> invalid_arg "Sqlite3_utils.Ty.nullable can't be nested"
+      | x -> Nullable x
 
   let (@>) x y = Cons (x,y)
   let p1 x = Cons (x,Nil)
@@ -106,35 +113,49 @@ module Ty = struct
         (fun x -> bind_ stmt i (Data.FLOAT x); tr_args stmt (i+1) k cb)
       | Cons (Data, k) ->
         (fun x -> bind_ stmt i x; tr_args stmt (i+1) k cb)
+      | Cons (Nullable p1, k) ->
+        (function
+          | None -> bind_ stmt i Data.NULL; tr_args stmt (i+1) k cb
+          | Some x -> tr_args stmt i (p1 @> k) cb x
+        )
 
   (* translate results *)
   let rec tr_row
     : type a res. (int->Data.t) -> int -> (a,res) t -> a -> res
     = fun get i ty f -> match ty with
       | Nil -> f
-      | Cons (Data, k) ->
+      | Cons (ty, k) ->
         let data = get i in
-        tr_row get (i+1) k (f data)
-      | Cons (Int64, k) ->
-        (match get i with
+        tr_row_data get data i ty k f
+  and tr_row_data
+    : type a b res. (int->Data.t) -> Data.t -> int -> a arg -> (b,res) t -> (a->b) -> res
+    = fun get data i ty k f ->
+      match ty with
+      | Data -> tr_row get (i+1) k (f data)
+      | Int64 ->
+        (match data with
          | Data.INT x -> tr_row get (i+1) k (f x)
          | d -> raise (Type_error d))
-      | Cons (Int, k) ->
-        (match get i with
+      | Int ->
+        (match data with
          | Data.INT x as d -> 
            let x = try Int64.to_int x with _ -> raise (Type_error d) in
            tr_row get (i+1) k (f x)
          | d -> raise (Type_error d))
-      | Cons (Float, k) ->
-        (match get i with
+      | Float ->
+        (match data with
          | Data.FLOAT x -> tr_row get (i+1) k (f x)
          | d -> raise (Type_error d))
-      | Cons (String kind, k) ->
-        (match get i, kind with
+      | String kind ->
+        (match data, kind with
          | Data.BLOB x, `Blob -> tr_row get (i+1) k (f x)
          | Data.TEXT x, `Text -> tr_row get (i+1) k (f x)
          | (Data.BLOB x | Data.TEXT x), `Both -> tr_row get (i+1) k (f x)
          | d, _ -> raise (Type_error d))
+      | Nullable ty' ->
+        (match data with
+         | Data.NONE | Data.NULL -> tr_row get (i+1) k (f None)
+         | _ -> tr_row_data get data i ty' k (fun x -> f (Some x)))
 end
 
 module Cursor = struct
