@@ -70,7 +70,7 @@ module Ty : sig
   val nullable : 'a arg -> 'a option arg
   (** Accepts {!Data.NULL} and {!Data.NONE} or ['a].
       @raise Invalid_argument if nested.
-      @since NEXT_RELEASE *)
+      @since 0.3 *)
 
   val nil : ('res, 'res) t
   (** 0 type arguments *)
@@ -130,12 +130,12 @@ module Cursor : sig
   val get_one : 'a t -> ('a, Rc.t) result
   (** Get the first element (useful when querying a scalar, like "count( * )").
       returns [Error Rc.NOTFOUND] if it's empty.
-      @since NEXT_RELEASE *)
+      @since 0.3 *)
 
   val get_one_exn : 'a t -> 'a
   (** Same as {!get_one} but raises an exception if the cursor is empty.
       @raise RcError with {!Rc.NOTFOUND} if it's empty.
-      @since NEXT_RELEASE *)
+      @since 0.3 *)
 
   val iter : f:('a -> unit) -> 'a t -> unit
   (** Iterate over the values *)
