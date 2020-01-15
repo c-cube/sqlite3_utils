@@ -244,16 +244,18 @@ module Cursor = struct
   let to_list c = List.rev (to_list_rev c)
 end
 
-let finally_ ~h x f =
+let finally_ ~hok ~herr x f =
   try
     let res = f x in
-    h x;
+    hok x;
     res
   with e ->
-    h x;
+    herr x;
     raise e
 
 let finalize_check_ stmt = check_ret_exn @@ Sqlite3.finalize stmt
+let finalize_nocheck_ stmt =
+  try ignore (Sqlite3.finalize stmt : Rc.t) with Sqlite3.Error _ -> ()
 
 let db_close_rec_ db =
   while not (Sqlite3.db_close db) do () done
@@ -261,11 +263,11 @@ let db_close_rec_ db =
 let with_db ?mode ?mutex ?cache ?vfs ?timeout str f =
   let db = Sqlite3.db_open ?mode ?mutex ?cache ?vfs str in
   (match timeout with Some ms -> setup_timeout db ~ms | None -> ());
-  finally_ ~h:db_close_rec_ db f
+  finally_ ~hok:db_close_rec_ ~herr:db_close_rec_ db f
 
 let with_stmt db str ~f =
   let stmt = Sqlite3.prepare db str in
-  finally_ ~h:finalize_check_ stmt f
+  finally_ ~hok:finalize_check_ ~herr:finalize_nocheck_ stmt f
 
 let check_arity_params_ stmt n : unit =
   if Sqlite3.bind_parameter_count stmt <> n then (
@@ -315,7 +317,7 @@ let exec_exn db str ~ty ~f =
   (* caution, bind starts at [1] *)
   Ty.tr_args stmt 1 params
     (fun () ->
-       finally_ ~h:finalize_check_ stmt
+       finally_ ~hok:finalize_check_ ~herr:finalize_nocheck_ stmt
          (fun stmt ->
             check_arity_res_ stmt (Ty.count ty_r);
             f (Cursor.make stmt ty_r f_r)))
@@ -341,7 +343,7 @@ let exec_no_cursor_ db str ~ty ~check =
   (* caution, bind starts at [1] *)
   Ty.tr_args stmt 1 ty
     (fun () ->
-       finally_ ~h:finalize_check_ stmt
+       finally_ ~hok:finalize_check_ ~herr:finalize_nocheck_ stmt
          (fun stmt ->
             check_arity_res_ stmt 0;
             (* just execute one step *)
