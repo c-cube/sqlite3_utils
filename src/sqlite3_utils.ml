@@ -138,7 +138,7 @@ module Ty = struct
          | d -> raise (Type_error d))
       | Int ->
         (match data with
-         | Data.INT x as d -> 
+         | Data.INT x as d ->
            let x = try Int64.to_int x with _ -> raise (Type_error d) in
            tr_row get (i+1) k (f x)
          | d -> raise (Type_error d))
@@ -313,14 +313,19 @@ let exec_raw_args db str a ~f =
 let exec_exn db str ~ty ~f =
   let params, ty_r, f_r = ty in
   let stmt = Sqlite3.prepare db str in
-  check_arity_params_ stmt (Ty.count params);
+  begin try check_arity_params_ stmt (Ty.count params);
+    with e ->
+      finalize_nocheck_ stmt;
+      raise e
+  end;
   (* caution, bind starts at [1] *)
   Ty.tr_args stmt 1 params
     (fun () ->
        finally_ ~hok:finalize_check_ ~herr:finalize_nocheck_ stmt
          (fun stmt ->
             check_arity_res_ stmt (Ty.count ty_r);
-            f (Cursor.make stmt ty_r f_r)))
+            let c = Cursor.make stmt ty_r f_r in
+            f c))
 
 let exec db str ~ty ~f =
   exec_exn db str ~ty
