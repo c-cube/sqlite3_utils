@@ -105,9 +105,9 @@ module Ty = struct
         (fun x -> bind_ stmt i (Data.INT (Int64.of_int x)); tr_args stmt (i+1) k cb)
       | Cons (Int64, k) ->
         (fun x -> bind_ stmt i (Data.INT x); tr_args stmt (i+1) k cb)
-      | Cons (String (`Text|`Both),k) ->
+      | Cons (String `Text,k) ->
         (fun x -> bind_ stmt i (Data.TEXT x); tr_args stmt (i+1) k cb)
-      | Cons (String `Blob,k) ->
+      | Cons (String (`Blob|`Both),k) ->
         (fun x -> bind_ stmt i (Data.BLOB x); tr_args stmt (i+1) k cb)
       | Cons (Float, k) ->
         (fun x -> bind_ stmt i (Data.FLOAT x); tr_args stmt (i+1) k cb)
