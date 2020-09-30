@@ -310,26 +310,57 @@ let exec_raw_args db str a ~f =
   with RcError c -> Error c
 
 (* execute statement parametrized by the array of arguments *)
-let exec_exn db str ~ty ~f =
+let exec_ db str ~ty ~f =
   let params, ty_r, f_r = ty in
   let stmt = Sqlite3.prepare db str in
-  begin try check_arity_params_ stmt (Ty.count params);
-    with e ->
-      finalize_nocheck_ stmt;
-      raise e
-  end;
+  (* initial checks. Returns a function that will, or not, call
+     a continuation [k] after all parameters are bound. *)
+  let f0 =
+    try
+      check_arity_params_ stmt (Ty.count params);
+      fun ~k -> k (Ok ())
+    with
+    | RcError e ->
+      fun ~k ->
+        finalize_nocheck_ stmt;
+        k (Error e)
+    | e ->
+      fun ~k:_ ->
+        finalize_nocheck_ stmt;
+        raise e
+  in
   (* caution, bind starts at [1] *)
   Ty.tr_args stmt 1 params
     (fun () ->
-       finally_ ~hok:finalize_check_ ~herr:finalize_nocheck_ stmt
-         (fun stmt ->
-            check_arity_res_ stmt (Ty.count ty_r);
-            let c = Cursor.make stmt ty_r f_r in
-            f c))
+       f0 ~k:(function
+           | Error e -> f (Error e)
+           | Ok () ->
+             try
+               check_arity_res_ stmt (Ty.count ty_r);
+               let c = Cursor.make stmt ty_r f_r in
+               let r = f (Ok c) in
+               finalize_check_ stmt;
+               r
+             with
+             | RcError e ->
+               finalize_nocheck_ stmt;
+               f (Error e)
+             | e ->
+               finalize_nocheck_ stmt;
+               raise e))
 
 let exec db str ~ty ~f =
-  exec_exn db str ~ty
-    ~f:(fun c -> try (Ok (f c)) with RcError rc -> Error rc)
+  exec_ db str ~ty
+    ~f:(function
+        | Ok x ->
+          (try Ok (f x) with RcError e -> Error e)
+        | Error e -> Error e)
+
+let exec_exn db str ~ty ~f =
+  exec_ db str ~ty
+    ~f:(function
+        | Ok x -> f x
+        | Error e -> raise (RcError e))
 
 let exec_no_params_exn db str ~ty ~f =
   with_stmt db str
@@ -342,23 +373,49 @@ let exec_no_params db str ~ty ~f =
   exec_no_params_exn db str ~ty
     ~f:(fun c -> try (Ok (f c)) with RcError rc -> Error rc)
 
-let exec_no_cursor_ db str ~ty ~check =
+let exec_no_cursor_ db str ~ty ~f =
   let stmt = Sqlite3.prepare db str in
-  check_arity_params_ stmt (Ty.count ty);
+  let f0 =
+    try
+      check_arity_params_ stmt (Ty.count ty);
+      fun ~k -> k (Ok ())
+    with
+    | RcError e ->
+      fun ~k ->
+        finalize_nocheck_ stmt;
+        k (Error e)
+    | e ->
+      fun ~k:_ ->
+        finalize_nocheck_ stmt;
+        raise e
+  in
   (* caution, bind starts at [1] *)
   Ty.tr_args stmt 1 ty
     (fun () ->
-       finally_ ~hok:finalize_check_ ~herr:finalize_nocheck_ stmt
-         (fun stmt ->
-            check_arity_res_ stmt 0;
-            (* just execute one step *)
-            check @@ Sqlite3.step stmt))
+       f0 ~k:(function
+           | Error e -> f (Error e)
+           | Ok () ->
+             try
+               (* just execute one step *)
+               check_ret_exn @@ Sqlite3.step stmt;
+               finalize_check_ stmt;
+               f (Ok ())
+             with
+             | RcError e ->
+               finalize_nocheck_ stmt;
+               f (Error e)
+             | e ->
+               finalize_nocheck_ stmt;
+               raise e))
 
 let exec_no_cursor_exn db str ~ty =
-  exec_no_cursor_ db str ~ty ~check:check_ret_exn
+  exec_no_cursor_ db str ~ty
+    ~f:(function
+        | Ok () -> ()
+        | Error e -> raise (RcError e))
 
 let exec_no_cursor db str ~ty =
-  exec_no_cursor_ db str ~ty ~check:(check_ret ())
+  exec_no_cursor_ db str ~ty ~f:(fun x -> x)
 
 (* From [ocaml-sqlite3EZ](https://github.com/mlin/ocaml-sqlite3EZ),
    with some changes. Compatible license (MIT) *)
@@ -447,7 +504,7 @@ let atomically db f =
 
 (* recursive query test *)
 (*$R
-  let q = "with recursive fib(a,b,c) as 
+  let q = "with recursive fib(a,b,c) as
     ( values (1,1,1),(2,1,2) UNION select a+1, c, b+c from fib where a<100)
     select a, c from fib where a<= ?;"
   in
@@ -473,6 +530,24 @@ let atomically db f =
         exec_exn db q ~ty:Ty.(p1 int, p2 int int, (fun x y->x,y))
           15 ~f:Cursor.to_list
       in
-      assert_equal ~printer:Q.Print.(list @@ pair int int) l_expect l 
+      assert_equal ~printer:Q.Print.(list @@ pair int int) l_expect l
     )
 *)
+
+(* regression for #1 *)
+(*$R
+  let db = Sqlite3.db_open ":memory:" in
+  exec0_exn db "CREATE TABLE ids(id INTEGER PRIMARY KEY)";
+  let insert db =
+    (Sqlite3_utils.exec_no_cursor
+      db
+       "INSERT INTO ids (id) VALUES(1)"
+       ~ty:Sqlite3_utils.Ty.nil
+     : (unit, Sqlite3.Rc.t) result)
+  in
+  assert_bool "isok" (Result.is_ok @@ insert db);
+  assert_bool "must not raise" (try ignore (insert db:_ result); true with _ -> false);
+  ()
+
+*)
+
