@@ -545,7 +545,7 @@ let atomically db f =
        ~ty:Sqlite3_utils.Ty.nil
      : (unit, Sqlite3.Rc.t) result)
   in
-  assert_bool "isok" (Result.is_ok @@ insert db);
+  assert_bool "isok" (match insert db with Ok _ -> true | Error _ -> false);
   assert_bool "must not raise" (try ignore (insert db:_ result); true with _ -> false);
   ()
 
