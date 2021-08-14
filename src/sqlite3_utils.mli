@@ -60,7 +60,7 @@ module Ty : sig
       a query that is parametrized by two values of type int and string
       respectively.
 
-      The definition is public @since NEXT_RELEASE
+      The definition is public @since 0.4
   *)
 
   val int : int arg
