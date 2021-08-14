@@ -46,17 +46,22 @@ val with_db :
 
 (** {2 Type Combinators} *)
 
-(** Values representing types to pass to a statement, or to extract from 
+(** Values representing types to pass to a statement, or to extract from
     a row *)
 module Ty : sig
-  type ('a, 'res) t
+  type 'a arg
+
+  type ('a, 'res) t =
+    | [] : ('res, 'res) t
+    | (::) : 'a arg * ('b, 'res) t -> ('a -> 'b, 'res) t
   (** A representation of a type that returns ['res].
       ['a] is typically a function type with the arguments one would expect,
       for example [(int -> string -> 'res, 'res) t] would be used for
       a query that is parametrized by two values of type int and string
-      respectively. *)
+      respectively.
 
-  type 'a arg
+      The definition is public @since NEXT_RELEASE
+  *)
 
   val int : int arg
 

@@ -47,13 +47,13 @@ module Ty = struct
     | Nullable : 'a arg -> 'a option arg
 
   type (_,_) t =
-    | Nil : ('res, 'res) t
-    | Cons : 'a arg * ('b, 'res) t -> ('a -> 'b, 'res) t
+    | [] : ('res, 'res) t
+    | (::) : 'a arg * ('b, 'res) t -> ('a -> 'b, 'res) t
     (* TODO: add this (with distinct count for args and row)
        | Raw : (Data.t array, 'res) t
     *)
 
-  let nil = Nil
+  let nil = []
   let int = Int
   let int64 = Int64
   let float = Float
@@ -68,20 +68,20 @@ module Ty = struct
       | Nullable _ -> invalid_arg "Sqlite3_utils.Ty.nullable can't be nested"
       | x -> Nullable x
 
-  let (@>) x y = Cons (x,y)
-  let p1 x = Cons (x,Nil)
-  let p2 x y = Cons (x,Cons (y,Nil))
-  let p3 x y z = Cons (x,Cons (y,Cons (z,Nil)))
-  let p4 x y z w = Cons (x,Cons (y,Cons (z,Cons (w,Nil))))
-  let p5 x y z w1 w2 = Cons (x,Cons (y,Cons (z,Cons (w1, Cons (w2, Nil)))))
-  let p6 x y z w1 w2 w3 = Cons (x,Cons (y,Cons (z,Cons (w1, Cons (w2, Cons (w3, Nil))))))
+  let (@>) x y = (::) (x,y)
+  let p1 x = [x]
+  let p2 x y = [x;y]
+  let p3 x y z = [x;y;z]
+  let p4 x y z w = [x;y;z;w]
+  let p5 x y z w1 w2 = [x;y;z;w1;w2]
+  let p6 x y z w1 w2 w3 = [x;y;z;w1;w2;w3]
 
   let rec (@>>)
     : type a b res. (a, b) t -> (b, res) t -> (a, res) t =
     fun ty1 ty2 ->
     match ty1 with
-      | Nil -> ty2
-      | Cons (x, ty1') -> Cons (x, ty1' @>> ty2)
+      | [] -> ty2
+      | (::) (x, ty1') -> (::) (x, ty1' @>> ty2)
 
   let id x = x
   let mkp2 x y = x,y
@@ -92,28 +92,28 @@ module Ty = struct
 
   let rec count : type a r. (a, r) t -> int
     = function
-    | Nil -> 0
-    | Cons (_, tl) -> 1 + count tl
+    | [] -> 0
+    | (::) (_, tl) -> 1 + count tl
 
   (* translate parameters *)
   let rec tr_args
     : type a res. Sqlite3.stmt -> int -> (a,res) t -> (unit->res) -> a
     = fun stmt i p cb ->
       match p with
-      | Nil -> cb()
-      | Cons(Int, k) ->
+      | [] -> cb()
+      | (::)(Int, k) ->
         (fun x -> bind_ stmt i (Data.INT (Int64.of_int x)); tr_args stmt (i+1) k cb)
-      | Cons (Int64, k) ->
+      | (::) (Int64, k) ->
         (fun x -> bind_ stmt i (Data.INT x); tr_args stmt (i+1) k cb)
-      | Cons (String `Text,k) ->
+      | (::) (String `Text,k) ->
         (fun x -> bind_ stmt i (Data.TEXT x); tr_args stmt (i+1) k cb)
-      | Cons (String (`Blob|`Both),k) ->
+      | (::) (String (`Blob|`Both),k) ->
         (fun x -> bind_ stmt i (Data.BLOB x); tr_args stmt (i+1) k cb)
-      | Cons (Float, k) ->
+      | (::) (Float, k) ->
         (fun x -> bind_ stmt i (Data.FLOAT x); tr_args stmt (i+1) k cb)
-      | Cons (Data, k) ->
+      | (::) (Data, k) ->
         (fun x -> bind_ stmt i x; tr_args stmt (i+1) k cb)
-      | Cons (Nullable p1, k) ->
+      | (::) (Nullable p1, k) ->
         (function
           | None -> bind_ stmt i Data.NULL; tr_args stmt (i+1) k cb
           | Some x -> tr_args stmt i (p1 @> k) cb x
@@ -123,8 +123,8 @@ module Ty = struct
   let rec tr_row
     : type a res. (int->Data.t) -> int -> (a,res) t -> a -> res
     = fun get i ty f -> match ty with
-      | Nil -> f
-      | Cons (ty, k) ->
+      | [] -> f
+      | (::) (ty, k) ->
         let data = get i in
         tr_row_data get data i ty k f
   and tr_row_data
@@ -484,7 +484,7 @@ let atomically db f =
   with_test_db (fun db ->
         exec_no_params_exn db
           "select name, job from person where age=20 order by name;"
-          ~ty:Ty.(p2 text text, mkp2)
+          ~ty:Ty.([text; text], mkp2)
           ~f:(fun c ->
               match Cursor.next c with
               | None -> assert_failure "cursor too short"
@@ -527,7 +527,7 @@ let atomically db f =
   ] in
   with_db ":memory:" (fun db ->
       let l =
-        exec_exn db q ~ty:Ty.(p1 int, p2 int int, (fun x y->x,y))
+        exec_exn db q ~ty:Ty.([int], [int;int], (fun x y->x,y))
           15 ~f:Cursor.to_list
       in
       assert_equal ~printer:Q.Print.(list @@ pair int int) l_expect l
@@ -539,10 +539,10 @@ let atomically db f =
   let db = Sqlite3.db_open ":memory:" in
   exec0_exn db "CREATE TABLE ids(id INTEGER PRIMARY KEY)";
   let insert db =
-    (Sqlite3_utils.exec_no_cursor
+    (exec_no_cursor
       db
        "INSERT INTO ids (id) VALUES(1)"
-       ~ty:Sqlite3_utils.Ty.nil
+       ~ty:(Ty.nil)
      : (unit, Sqlite3.Rc.t) result)
   in
   assert_bool "isok" (match insert db with Ok _ -> true | Error _ -> false);
