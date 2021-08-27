@@ -51,9 +51,6 @@ val with_db :
 module Ty : sig
   type 'a arg
 
-  type ('a, 'res) t =
-    | [] : ('res, 'res) t
-    | (::) : 'a arg * ('b, 'res) t -> ('a -> 'b, 'res) t
   (** A representation of a type that returns ['res].
       ['a] is typically a function type with the arguments one would expect,
       for example [(int -> string -> 'res, 'res) t] would be used for
@@ -62,6 +59,12 @@ module Ty : sig
 
       The definition is public @since 0.4
   *)
+  type ('a, 'res) t =
+    | [] : ('res, 'res) t
+    (** No argument *)
+
+    | (::) : 'a arg * ('b, 'res) t -> ('a -> 'b, 'res) t
+    (** An argument of type ['a], followed by the rest of the argument list *)
 
   val int : int arg
 
