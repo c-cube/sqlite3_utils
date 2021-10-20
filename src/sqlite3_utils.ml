@@ -283,6 +283,21 @@ let check_arity_res_ stmt n : unit =
          (Sqlite3.column_count stmt) n);
   )
 
+let exec_get_column_names self str : _ list =
+  let stmt = Sqlite3.prepare self str in
+  let n = Sqlite3.column_count stmt in
+  List.init n (Sqlite3.column_name stmt)
+
+(*$R
+  let db = Sqlite3.db_open ":memory:" in
+  exec0_exn db "create table foo (a text, b text, c int);";
+  let l = exec_get_column_names db "select * from foo;" in
+  assert_equal ~printer:(String.concat ";") ["a"; "b"; "c"] l;
+
+  let l2 = exec_get_column_names db "select b, a, c as c2 from foo;" in
+  assert_equal ~printer:(String.concat ";") ["b"; "a"; "c2"] l2;
+*)
+
 let exec0_exn db str : unit = check_ret_exn @@ Sqlite3.exec db str
 let exec0 db str : _ result = check_ret () @@ Sqlite3.exec db str
 
