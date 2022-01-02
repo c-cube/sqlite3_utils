@@ -101,22 +101,22 @@ module Ty = struct
     = fun stmt i p cb ->
       match p with
       | [] -> cb()
-      | (::)(Int, k) ->
+      | Int :: k ->
         (fun x -> bind_ stmt i (Data.INT (Int64.of_int x)); tr_args stmt (i+1) k cb)
-      | (::) (Int64, k) ->
+      | Int64 :: k ->
         (fun x -> bind_ stmt i (Data.INT x); tr_args stmt (i+1) k cb)
-      | (::) (String `Text,k) ->
+      | String `Text :: k ->
         (fun x -> bind_ stmt i (Data.TEXT x); tr_args stmt (i+1) k cb)
-      | (::) (String (`Blob|`Both),k) ->
+      | String (`Blob|`Both) :: k ->
         (fun x -> bind_ stmt i (Data.BLOB x); tr_args stmt (i+1) k cb)
-      | (::) (Float, k) ->
+      | Float :: k ->
         (fun x -> bind_ stmt i (Data.FLOAT x); tr_args stmt (i+1) k cb)
-      | (::) (Data, k) ->
+      | Data :: k ->
         (fun x -> bind_ stmt i x; tr_args stmt (i+1) k cb)
-      | (::) (Nullable p1, k) ->
+      | Nullable p1 :: k ->
         (function
           | None -> bind_ stmt i Data.NULL; tr_args stmt (i+1) k cb
-          | Some x -> tr_args stmt i (p1 @> k) cb x
+          | Some x -> tr_args stmt i (p1 :: k) cb x
         )
 
   (* translate results *)
