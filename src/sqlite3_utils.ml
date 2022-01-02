@@ -260,8 +260,9 @@ let finalize_nocheck_ stmt =
 let db_close_rec_ db =
   while not (Sqlite3.db_close db) do () done
 
-let with_db ?mode ?mutex ?cache ?vfs ?timeout str f =
+let with_db ?(wal=false) ?mode ?mutex ?cache ?vfs ?timeout str f =
   let db = Sqlite3.db_open ?mode ?mutex ?cache ?vfs str in
+  if wal then check_ret_exn @@ Sqlite3.exec db "pragma journal_mode=WAL;";
   (match timeout with Some ms -> setup_timeout db ~ms | None -> ());
   finally_ ~hok:db_close_rec_ ~herr:db_close_rec_ db f
 

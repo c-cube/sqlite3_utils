@@ -33,6 +33,7 @@ val setup_timeout : ?ms:int -> t -> unit
 (** on "busy", wait [ms] milliseconds before failing. *)
 
 val with_db :
+  ?wal:bool ->
   ?mode:[ `NO_CREATE | `READONLY ] ->
   ?mutex:[ `FULL | `NO ] ->
   ?cache:[ `PRIVATE | `SHARED ] -> ?vfs:string ->
@@ -42,6 +43,8 @@ val with_db :
     Parameters follow {!Sqlite3.db_open}.
     @param timeout if provided, timeout in milliseconds before a query fails
       with "BUSY".
+    @param wal if true, use "pragma journal_mode=WAL" to use a write ahead log
+      (since NEXT_RELEASE)
 *)
 
 (** {2 Type Combinators} *)
