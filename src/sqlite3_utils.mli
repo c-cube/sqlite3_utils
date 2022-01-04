@@ -44,7 +44,7 @@ val with_db :
     @param timeout if provided, timeout in milliseconds before a query fails
       with "BUSY".
     @param wal if true, use "pragma journal_mode=WAL" to use a write ahead log
-      (since NEXT_RELEASE)
+      (since 0.5)
 *)
 
 (** {2 Type Combinators} *)
@@ -285,7 +285,7 @@ val exec_no_cursor_exn :
 val exec_get_column_names : t -> string -> string list
 (** [exec_get_column_names db query] is the list of names of
     columns that would be returned by [exec db query].
-    @since NEXT_RELEASE *)
+    @since 0.5 *)
 
 val transact : t -> (t -> 'a) -> 'a
 (** [transact db f] runs [f db] within a transaction (begin/commit/rollback).
