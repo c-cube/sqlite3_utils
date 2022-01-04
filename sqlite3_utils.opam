@@ -23,3 +23,4 @@ homepage: "https://github.com/c-cube/sqlite3_utils/"
 doc: "https://c-cube.github.io/sqlite3_utils/"
 bug-reports: "https://github.com/c-cube/sqlite3_utils/issues"
 dev-repo: "git+https://github.com/c-cube/sqlite3_utils.git"
+x-ci-accept-failures: [ "centos-7" "oraclelinux-7"]
