@@ -47,7 +47,7 @@ Let us re-consider the previous example but with the typed API:
    exec0_exn db "create table person (name text, age int);";
    exec0_exn db "insert into person values ('alice', 20), ('bob', 25) ;";
    exec db "select age from person where name=? ;"
-    ~ty:Ty.(p1 text, p1 int, (fun (x:int) -> x))
+    ~ty:Ty.([text], [int], (fun (x:int) -> x))
     "alice"
      ~f:Cursor.to_list);;
 - : (int list, Rc.t) result = Ok [20]
@@ -61,8 +61,9 @@ where `f` turns the list of returned columns into a single value. `f`
 can typically be used to build a tuple or record for each result row.
 
 The module `Sqlite3_utils.Ty` contains combinators for declaring types
-(base types: `text`, `int`, `blob`, etc. and composition operators such
-as `int @> text @> nil`) as well as for making simple tuples.
+(base types: `text`, `int`, `blob`, etc. and composition operators including
+`::` so that one can one `[int; text]`)
+as well as for making simple tuples.
 
 ### Computing the fibonacci function
 
@@ -77,7 +78,7 @@ We can use sqlite to compute recursive functions with the
   in
   with_db ":memory:" (fun db ->
       let l =
-        exec db q ~ty:Ty.(p2 int int, p1 int, id)
+        exec db q ~ty:Ty.([int; int], [int], p1 int, id)
           n n ~f:Cursor.to_list
       in
       match l with
