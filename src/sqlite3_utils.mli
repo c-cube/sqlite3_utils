@@ -121,7 +121,7 @@ module Ty : sig
   val mkp6: 'a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'a * 'b * 'c * 'd * 'e * 'f
 end
 
-(** {2 Cursor API} 
+(** {2 Cursor API}
 
     A Cursor is a special iterator over Sqlite rows of results.
     It should be consumed quickly as it will not survive the call to
@@ -138,6 +138,10 @@ module Cursor : sig
   val next : 'a t -> 'a option
   (** Get next value, or [None] if all values have been enumerated *)
 
+  val next_with_last_row_id : 'a t -> ('a * int64) option
+  (** Same as {!next}, but also return last inserted row ID
+    @since NEXT_RELEASE *)
+
   val get_one : 'a t -> ('a, Rc.t) result
   (** Get the first element (useful when querying a scalar, like "count( * )").
       returns [Error Rc.NOTFOUND] if it's empty.
@@ -150,6 +154,10 @@ module Cursor : sig
 
   val iter : f:('a -> unit) -> 'a t -> unit
   (** Iterate over the values *)
+
+  val iter_with_last_row_id : f:(int64 -> 'a -> unit) -> 'a t -> unit
+  (** Iterate over the values with last row id
+      @since NEXT_RELEASE *)
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
   (** Map over values of the cursor. Once [map ~f c] is built, [c] should
@@ -290,8 +298,10 @@ val exec_get_column_names : t -> string -> string list
 val transact : t -> (t -> 'a) -> 'a
 (** [transact db f] runs [f db] within a transaction (begin/commit/rollback).
     Useful to perform a batch of insertions or updates, as Sqlite doesn't
-    write very fast. *)
+    write very fast. Cannot be nested.
+    See https://www.sqlite.org/lang_transaction.html . *)
 
 val atomically : t -> (t -> 'a) -> 'a
 (** Same as {!transact} but uses Sqlite's savepoint/release/rollback mechanism.
-    instead of begin/commit/rolllback *)
+    instead of begin/commit/rollback.
+    This can be nested, unlike {!transact}. *)
