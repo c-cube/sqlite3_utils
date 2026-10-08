@@ -3,7 +3,7 @@ version: "0.5"
 authors: ["Simon Cruanes"]
 maintainer: "simon.cruanes.2007@m4x.org"
 license: "MIT"
-synopsis: "High-level wrapper around ocaml-sqlite3"
+synopsis: "High-level wrapper around sqlite3-ocaml"
 build: [
   ["dune" "build" "@install" "-p" name "-j" jobs]
   ["dune" "build" "@doc" "-p" name] {with-doc}
